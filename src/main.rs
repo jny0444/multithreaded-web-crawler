@@ -1,4 +1,4 @@
-use std::{error::Error, fs::File, time::Instant};
+use std::{error::Error, fs::File, thread, time::Instant};
 
 fn main() {
     let images = vec![
@@ -26,13 +26,27 @@ fn main() {
 
     let now = Instant::now();
 
-    for (index, url) in images.iter().enumerate() {
+    let mut handles = Vec::new();
+
+    for (index, url) in images.into_iter().enumerate() {
+        /*
         println!("Downloading image {}", index + 1);
 
         match download_image(url, index) {
             Ok(_) => println!("Successfully saved image as image_{}.jpg", index + 1),
             Err(e) => eprintln!("Failed to download image {}: {}", index + 1, e),
         }
+        */
+        let handle = thread::spawn(move || match download_image(url, index) {
+            Ok(_) => println!("Successfully saved image as image_{}.jpg", index + 1),
+            Err(e) => eprintln!("Failed to download image {}: {}", index + 1, e),
+        });
+
+        handles.push(handle);
+    }
+
+    for handle in handles {
+        handle.join().unwrap();
     }
 
     let duration = now.elapsed();

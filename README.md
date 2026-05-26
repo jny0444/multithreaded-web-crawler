@@ -7,4 +7,4 @@ A rust multi threaded web crawler to download images and learn how concurrency w
 |                 | no of images | time taken   |
 | --------------- | ------------ | ------------ |
 | Single Threaded | 20           | 17.590181459 |
-| Multi Threaded  | 20           |              |
+| Multi Threaded  | 20           | 1.698569833  |
