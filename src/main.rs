@@ -1,4 +1,12 @@
-use std::{error::Error, fs::File, thread, time::Instant};
+use std::{
+    error::Error,
+    fs::File,
+    sync::{Arc, Mutex},
+    thread,
+    time::Instant,
+};
+
+use crossbeam_channel::unbounded;
 
 fn main() {
     let images = vec![
@@ -27,13 +35,14 @@ fn main() {
 
     let now = Instant::now();
 
-    let (tx, rx) = crossbeam_channel::unbounded::<(usize, String)>();
-
+    let (tx, rx) = unbounded::<(usize, String)>();
     for (index, url) in images.into_iter().enumerate() {
         tx.send((index, url)).unwrap();
     }
 
     drop(tx);
+
+    let total_bytes_downloaded = Arc::new(Mutex::new(0));
 
     let mut handles = Vec::new();
     let num_workers = 4;
@@ -41,23 +50,27 @@ fn main() {
     for worker_id in 0..num_workers {
         let rx_clone = rx.clone();
 
-        let handle = thread::spawn(move || {
-            println!("Worker {} started, waiting for jobs...", worker_id);
+        let counter_clone = Arc::clone(&total_bytes_downloaded);
 
+        let handle = thread::spawn(move || {
             while let Ok((index, url)) = rx_clone.recv() {
-                println!("Worker {} picked up image {}", worker_id, index + 1);
+                println!("Worker {} downloading image {}", worker_id, index + 1);
 
                 match download_image(&url, index) {
-                    Ok(_) => println!(
-                        "Worker {} successfully saved image_{}.jpg",
-                        worker_id,
-                        index + 1
-                    ),
+                    Ok(bytes) => {
+                        println!(
+                            "Worker {} saved image_{}.jpg ({:?} bytes)",
+                            worker_id,
+                            index + 1,
+                            bytes
+                        );
+
+                        let mut guard = counter_clone.lock().unwrap();
+                        *guard += bytes;
+                    }
                     Err(e) => eprintln!("Worker {} failed image {}: {}", worker_id, index + 1, e),
                 }
             }
-
-            println!("Worker {} has no more work. Shutting down.", worker_id);
         });
 
         handles.push(handle);
@@ -67,17 +80,23 @@ fn main() {
         handle.join().unwrap();
     }
 
+    let final_bytes = *total_bytes_downloaded.lock().unwrap();
+
     let duration = now.elapsed();
     println!("Took {:?}", duration);
+    println!(
+        "Total MB downloaded: {:.2} MB",
+        final_bytes as f64 / 1_000_000.0
+    );
 }
 
-fn download_image(url: &String, index: usize) -> Result<(), Box<dyn Error>> {
+fn download_image(url: &String, index: usize) -> Result<u64, Box<dyn Error>> {
     let mut response = reqwest::blocking::get(url)?;
 
     let file_name = format!("asset/image_{}.jpg", index + 1);
     let mut file = File::create(file_name)?;
 
-    response.copy_to(&mut file)?;
+    let bytes_written = response.copy_to(&mut file)?;
 
-    Ok(())
+    Ok(bytes_written)
 }
