@@ -1,6 +1,6 @@
-# Multithreaded Web Crawler
+# Multithreaded Batch Download
 
-A rust multi threaded web crawler to download images and learn how concurrency works in rust.
+A rust multi threaded batch download to download images and learn how concurrency works in rust.
 
 ## Benchmarks
 
